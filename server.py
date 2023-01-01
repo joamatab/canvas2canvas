@@ -38,9 +38,7 @@ class LayoutViewServer(object):
     return [ d[1] for d in self.layout_view.annotation_templates() ]
 
   def layer_dump(self):
-    js = []
-    for l in self.layout_view.each_layer():
-      js.append({
+    return [{
         "dp": l.eff_dither_pattern(),
         "ls": l.eff_line_style(),
         "c": l.eff_fill_color(),
@@ -53,9 +51,8 @@ class LayoutViewServer(object):
         "w": l.width,
         "x": l.xfill,
         "name": l.name,
-        "id": l.id()
-      })
-    return js
+        "id": l.id(),
+    } for l in self.layout_view.each_layer()]
 
   async def connection(self, websocket, path):
 
@@ -110,50 +107,50 @@ class LayoutViewServer(object):
     function(db.Point(js["x"], js["y"]), self.buttons_from_js(js))
 
   async def reader(self, websocket):
-    while(True):
+    while True:
       js = await websocket.recv()
       print(f"From Client: {js}") # TODO: remove debug output
       js = json.loads(js)
       msg = js["msg"]
-      if msg == "quit":
-        break
-      elif msg == "resize":
-        self.layout_view.resize(js["width"], js["height"])
-      elif msg == "clear-annotations":
+      if msg == "clear-annotations":
         self.layout_view.clear_annotations()
-      elif msg == "select-ruler":
-        ruler = js["value"]
-        self.layout_view.set_config("current-ruler-template", str(ruler))
-      elif msg == "select-mode":
-        mode = js["value"]
-        self.layout_view.switch_mode(mode)
-      elif msg == "layer-v-all":
-        vis = js["value"]
-        for l in self.layout_view.each_layer():
-          l.visible = vis
+      elif msg == "initialize":
+        self.layout_view.resize(js["width"], js["height"])
+        await websocket.send(json.dumps({ "msg": "initialized" }))
       elif msg == "layer-v":
         id = js["id"]
         vis = js["value"]
         for l in self.layout_view.each_layer():
           if l.id() == id:
             l.visible = vis
-      elif msg == "initialize":
-        self.layout_view.resize(js["width"], js["height"])
-        await websocket.send(json.dumps({ "msg": "initialized" }))
+      elif msg == "layer-v-all":
+        vis = js["value"]
+        for l in self.layout_view.each_layer():
+          l.visible = vis
       elif msg == "mode_select":
         self.layout_view.switch_mode(js["mode"])
+      elif msg == "mouse_dblclick":
+        self.mouse_event(self.layout_view.send_mouse_double_clicked_event, js)
+      elif msg == "mouse_enter":
+        self.layout_view.send_enter_event()
+      elif msg == "mouse_leave":
+        self.layout_view.send_leave_event()
       elif msg == "mouse_move":
         self.mouse_event(self.layout_view.send_mouse_move_event, js)
       elif msg == "mouse_pressed":
         self.mouse_event(self.layout_view.send_mouse_press_event, js)
       elif msg == "mouse_released":
         self.mouse_event(self.layout_view.send_mouse_release_event, js)
-      elif msg == "mouse_enter":
-        self.layout_view.send_enter_event()
-      elif msg == "mouse_leave":
-        self.layout_view.send_leave_event()
-      elif msg == "mouse_dblclick":
-        self.mouse_event(self.layout_view.send_mouse_double_clicked_event, js)
+      elif msg == "quit":
+        break
+      elif msg == "resize":
+        self.layout_view.resize(js["width"], js["height"])
+      elif msg == "select-mode":
+        mode = js["value"]
+        self.layout_view.switch_mode(mode)
+      elif msg == "select-ruler":
+        ruler = js["value"]
+        self.layout_view.set_config("current-ruler-template", str(ruler))
       elif msg == "wheel":
         self.wheel_event(self.layout_view.send_wheel_event, js)
 
